@@ -2,9 +2,10 @@
 
 import { useCallback, useEffect, useState } from "react";
 
-import { Plus } from "lucide-react";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Controller, useForm, type Resolver } from "react-hook-form";
+import type { ColumnDef } from "@tanstack/react-table";
+import { Plus } from "lucide-react";
+import { Controller, type Resolver, useForm } from "react-hook-form";
 import { toast } from "sonner";
 import { z } from "zod";
 
@@ -12,16 +13,16 @@ import { ConfirmDialog } from "@/components/confirm-dialog";
 import { DataTable } from "@/components/data-table/data-table";
 import { DataTablePagination } from "@/components/data-table/data-table-pagination";
 import { PageHeader } from "@/components/page-header";
+import { RowActions } from "@/components/row-actions";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Field, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { commonStatusLabels } from "@/lib/api/enum-labels";
 import { createCategory, deleteCategory, listCategories, updateCategory } from "@/lib/api/categories";
-import { CommonStatus, type CategoryDto } from "@/lib/api/types";
-import type { ColumnDef } from "@tanstack/react-table";
+import { commonStatusLabels } from "@/lib/api/enum-labels";
+import { type CategoryDto, CommonStatus } from "@/lib/api/types";
 
 const statusVariant: Record<CommonStatus, "default" | "secondary" | "destructive" | "outline"> = {
   [CommonStatus.Active]: "default",
@@ -40,7 +41,12 @@ const schema = z.object({
 type FormValues = z.infer<typeof schema>;
 
 function CategoryForm({
-  open, onOpenChange, onSubmit, defaultValues, categories, isLoading,
+  open,
+  onOpenChange,
+  onSubmit,
+  defaultValues,
+  categories,
+  isLoading,
 }: {
   open: boolean;
   onOpenChange: (o: boolean) => void;
@@ -70,52 +76,91 @@ function CategoryForm({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
-        <DialogHeader><DialogTitle>{defaultValues ? "Edit Category" : "New Category"}</DialogTitle></DialogHeader>
-        <form onSubmit={form.handleSubmit(async (v) => { await onSubmit(v); form.reset(); })} className="space-y-4">
+        <DialogHeader>
+          <DialogTitle>{defaultValues ? "Edit Category" : "New Category"}</DialogTitle>
+        </DialogHeader>
+        <form
+          onSubmit={form.handleSubmit(async (v) => {
+            await onSubmit(v);
+            form.reset();
+          })}
+          className="space-y-4"
+        >
           <FieldGroup className="gap-4">
-            <Controller control={form.control} name="name" render={({ field, fieldState }) => (
-              <Field data-invalid={fieldState.invalid}>
-                <FieldLabel>Name </FieldLabel>
-                <Input {...field} placeholder="Category name" />
-                {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
-              </Field>
-            )} />
-            <Controller control={form.control} name="description" render={({ field }) => (
-              <Field><FieldLabel>Description</FieldLabel><Input {...field} placeholder="Optional" /></Field>
-            )} />
-            <Controller control={form.control} name="parentCategoryId" render={({ field }) => (
-              <Field>
-                <FieldLabel>Parent Category</FieldLabel>
-                <Select value={field.value ?? ""} onValueChange={(v) => field.onChange(v === "none" ? "" : v)}>
-                  <SelectTrigger><SelectValue placeholder="None (top-level)" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">None</SelectItem>
-                    {categories.filter((c) => c.id !== defaultValues?.id).map((c) => (
-                      <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </Field>
-            )} />
-            {defaultValues && (
-              <Controller control={form.control} name="status" render={({ field }) => (
+            <Controller
+              control={form.control}
+              name="name"
+              render={({ field, fieldState }) => (
+                <Field data-invalid={fieldState.invalid}>
+                  <FieldLabel>Name </FieldLabel>
+                  <Input {...field} placeholder="Category name" />
+                  {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
+                </Field>
+              )}
+            />
+            <Controller
+              control={form.control}
+              name="description"
+              render={({ field }) => (
                 <Field>
-                  <FieldLabel>Status</FieldLabel>
-                  <Select value={String(field.value)} onValueChange={(v) => field.onChange(Number(v))}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
+                  <FieldLabel>Description</FieldLabel>
+                  <Input {...field} placeholder="Optional" />
+                </Field>
+              )}
+            />
+            <Controller
+              control={form.control}
+              name="parentCategoryId"
+              render={({ field }) => (
+                <Field>
+                  <FieldLabel>Parent Category</FieldLabel>
+                  <Select value={field.value ?? ""} onValueChange={(v) => field.onChange(v === "none" ? "" : v)}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="None (top-level)" />
+                    </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="1">Active</SelectItem>
-                      <SelectItem value="2">Inactive</SelectItem>
-                      <SelectItem value="3">Archived</SelectItem>
+                      <SelectItem value="none">None</SelectItem>
+                      {categories
+                        .filter((c) => c.id !== defaultValues?.id)
+                        .map((c) => (
+                          <SelectItem key={c.id} value={c.id}>
+                            {c.name}
+                          </SelectItem>
+                        ))}
                     </SelectContent>
                   </Select>
                 </Field>
-              )} />
+              )}
+            />
+            {defaultValues && (
+              <Controller
+                control={form.control}
+                name="status"
+                render={({ field }) => (
+                  <Field>
+                    <FieldLabel>Status</FieldLabel>
+                    <Select value={String(field.value)} onValueChange={(v) => field.onChange(Number(v))}>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="1">Active</SelectItem>
+                        <SelectItem value="2">Inactive</SelectItem>
+                        <SelectItem value="3">Archived</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </Field>
+                )}
+              />
             )}
           </FieldGroup>
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isLoading}>Cancel</Button>
-            <Button type="submit" disabled={isLoading}>{isLoading ? "Saving…" : defaultValues ? "Update" : "Create"}</Button>
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isLoading}>
+              Cancel
+            </Button>
+            <Button type="submit" disabled={isLoading}>
+              {isLoading ? "Saving…" : defaultValues ? "Update" : "Create"}
+            </Button>
           </DialogFooter>
         </form>
       </DialogContent>
@@ -158,22 +203,44 @@ export default function CategoriesPage() {
     }
   }, [page, pageSize, search]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    void load();
+  }, [load]);
 
   const columns: ColumnDef<CategoryDto, unknown>[] = [
     { accessorKey: "name", header: "Name" },
     { accessorKey: "description", header: "Description", cell: ({ getValue }) => (getValue() as string | null) ?? "—" },
-    { accessorKey: "parentCategoryName", header: "Parent", cell: ({ getValue }) => (getValue() as string | null) ?? "—" },
-    { accessorKey: "status", header: "Status", cell: ({ getValue }) => {
-      const s = getValue() as CommonStatus;
-      return <Badge variant={statusVariant[s]}>{commonStatusLabels[s]}</Badge>;
-    }},
-    { id: "actions", header: "", cell: ({ row }) => (
-      <div className="flex gap-2 justify-end">
-        <Button variant="ghost" size="sm" onClick={() => { setEditTarget(row.original); setFormOpen(true); }}>Edit</Button>
-        <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive" onClick={() => setDeleteTarget(row.original)}>Delete</Button>
-      </div>
-    )},
+    {
+      accessorKey: "parentCategoryName",
+      header: "Parent",
+      cell: ({ getValue }) => (getValue() as string | null) ?? "—",
+    },
+    {
+      accessorKey: "status",
+      header: "Status",
+      cell: ({ getValue }) => {
+        const s = getValue() as CommonStatus;
+        return <Badge variant={statusVariant[s]}>{commonStatusLabels[s]}</Badge>;
+      },
+    },
+    {
+      id: "actions",
+      header: "Actions",
+      cell: ({ row }) => (
+        <RowActions
+          actions={[
+            {
+              label: "Edit",
+              onClick: () => {
+                setEditTarget(row.original);
+                setFormOpen(true);
+              },
+            },
+            { label: "Delete", onClick: () => setDeleteTarget(row.original), destructive: true, separator: true },
+          ]}
+        />
+      ),
+    },
   ];
 
   const handleSubmit = async (values: FormValues) => {
@@ -198,7 +265,7 @@ export default function CategoriesPage() {
       }
       setFormOpen(false);
       setEditTarget(null);
-      load();
+      await load();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to save category.");
     } finally {
@@ -213,7 +280,7 @@ export default function CategoriesPage() {
       await deleteCategory(deleteTarget.id);
       toast.success("Category deleted.");
       setDeleteTarget(null);
-      load();
+      await load();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to delete category.");
     } finally {
@@ -227,18 +294,64 @@ export default function CategoriesPage() {
         title="Categories"
         description="Manage product categories"
         action={
-          <Button onClick={() => { setEditTarget(null); setFormOpen(true); }}>
-            <Plus className="h-4 w-4 mr-2" />New Category
+          <Button
+            onClick={() => {
+              setEditTarget(null);
+              setFormOpen(true);
+            }}
+          >
+            <Plus className="mr-2 h-4 w-4" />
+            New Category
           </Button>
         }
       />
-      <div className="flex gap-2 mb-4">
-        <Input placeholder="Search categories…" value={search} onChange={(e) => { setSearch(e.target.value); setPage(1); }} className="max-w-sm" />
+      <div className="mb-4 flex gap-2">
+        <Input
+          placeholder="Search categories…"
+          value={search}
+          onChange={(e) => {
+            setSearch(e.target.value);
+            setPage(1);
+          }}
+          className="max-w-sm"
+        />
       </div>
       <DataTable columns={columns} data={items} isLoading={isLoading} />
-      <DataTablePagination page={page} pageSize={pageSize} totalCount={totalCount} totalPages={totalPages} hasPrevious={hasPrevious} hasNext={hasNext} onPageChange={setPage} onPageSizeChange={(s) => { setPageSize(s); setPage(1); }} />
-      <CategoryForm open={formOpen} onOpenChange={(o) => { setFormOpen(o); if (!o) setEditTarget(null); }} onSubmit={handleSubmit} defaultValues={editTarget} categories={allCategories} isLoading={isSaving} />
-      <ConfirmDialog open={!!deleteTarget} onOpenChange={(o) => { if (!o) setDeleteTarget(null); }} title="Delete Category" description={`Delete "${deleteTarget?.name}"?`} onConfirm={handleDelete} isLoading={isDeleting} confirmLabel="Delete" />
+      <DataTablePagination
+        page={page}
+        pageSize={pageSize}
+        totalCount={totalCount}
+        totalPages={totalPages}
+        hasPrevious={hasPrevious}
+        hasNext={hasNext}
+        onPageChange={setPage}
+        onPageSizeChange={(s) => {
+          setPageSize(s);
+          setPage(1);
+        }}
+      />
+      <CategoryForm
+        open={formOpen}
+        onOpenChange={(o) => {
+          setFormOpen(o);
+          if (!o) setEditTarget(null);
+        }}
+        onSubmit={handleSubmit}
+        defaultValues={editTarget}
+        categories={allCategories}
+        isLoading={isSaving}
+      />
+      <ConfirmDialog
+        open={!!deleteTarget}
+        onOpenChange={(o) => {
+          if (!o) setDeleteTarget(null);
+        }}
+        title="Delete Category"
+        description={`Delete "${deleteTarget?.name}"?`}
+        onConfirm={handleDelete}
+        isLoading={isDeleting}
+        confirmLabel="Delete"
+      />
     </div>
   );
 }

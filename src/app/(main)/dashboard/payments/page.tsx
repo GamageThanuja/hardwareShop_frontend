@@ -2,16 +2,17 @@
 
 import { useCallback, useEffect, useState } from "react";
 
-import { Plus } from "lucide-react";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Controller, useForm, type Resolver } from "react-hook-form";
+import type { ColumnDef } from "@tanstack/react-table";
+import { Plus } from "lucide-react";
+import { Controller, type Resolver, useForm } from "react-hook-form";
 import { toast } from "sonner";
 import { z } from "zod";
 
-import { ConfirmDialog } from "@/components/confirm-dialog";
 import { DataTable } from "@/components/data-table/data-table";
 import { DataTablePagination } from "@/components/data-table/data-table-pagination";
 import { PageHeader } from "@/components/page-header";
+import { RowActions } from "@/components/row-actions";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -21,9 +22,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { paymentMethodLabels } from "@/lib/api/enum-labels";
 import { listPayments, recordPayment, voidPayment } from "@/lib/api/payments";
 import { listSalesOrders } from "@/lib/api/sales-orders";
-import { PaymentMethod, type PaymentDto, type SalesOrderDto } from "@/lib/api/types";
+import { type PaymentDto, PaymentMethod, type SalesOrderDto } from "@/lib/api/types";
 import { formatCurrency } from "@/lib/utils";
-import type { ColumnDef } from "@tanstack/react-table";
 
 const schema = z.object({
   salesOrderId: z.string().min(1, "Sales order is required"),
@@ -38,77 +38,153 @@ type FormValues = z.infer<typeof schema>;
 const voidSchema = z.object({ reason: z.string().optional() });
 type VoidFormValues = z.infer<typeof voidSchema>;
 
-function RecordPaymentForm({ open, onOpenChange, onSubmit, isLoading, salesOrders }: {
-  open: boolean; onOpenChange: (o: boolean) => void; onSubmit: (v: FormValues) => Promise<void>;
-  isLoading?: boolean; salesOrders: SalesOrderDto[];
+function RecordPaymentForm({
+  open,
+  onOpenChange,
+  onSubmit,
+  isLoading,
+  salesOrders,
+}: {
+  open: boolean;
+  onOpenChange: (o: boolean) => void;
+  onSubmit: (v: FormValues) => Promise<void>;
+  isLoading?: boolean;
+  salesOrders: SalesOrderDto[];
 }) {
   const today = new Date().toISOString().split("T")[0];
   const form = useForm<FormValues>({
     resolver: zodResolver(schema) as Resolver<FormValues>,
-    defaultValues: { salesOrderId: "", amount: 0, method: PaymentMethod.Cash, paymentDate: today, referenceNumber: "", notes: "" },
+    defaultValues: {
+      salesOrderId: "",
+      amount: 0,
+      method: PaymentMethod.Cash,
+      paymentDate: today,
+      referenceNumber: "",
+      notes: "",
+    },
   });
 
   useEffect(() => {
-    if (!open) form.reset({ salesOrderId: "", amount: 0, method: PaymentMethod.Cash, paymentDate: today, referenceNumber: "", notes: "" });
+    if (!open)
+      form.reset({
+        salesOrderId: "",
+        amount: 0,
+        method: PaymentMethod.Cash,
+        paymentDate: today,
+        referenceNumber: "",
+        notes: "",
+      });
   }, [open, form, today]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
-        <DialogHeader><DialogTitle>Record Payment</DialogTitle></DialogHeader>
-        <form onSubmit={form.handleSubmit(async (v) => { await onSubmit(v); })} className="space-y-4">
+        <DialogHeader>
+          <DialogTitle>Record Payment</DialogTitle>
+        </DialogHeader>
+        <form
+          onSubmit={form.handleSubmit(async (v) => {
+            await onSubmit(v);
+          })}
+          className="space-y-4"
+        >
           <FieldGroup className="gap-3">
-            <Controller control={form.control} name="salesOrderId" render={({ field, fieldState }) => (
-              <Field data-invalid={fieldState.invalid}>
-                <FieldLabel>Sales Order *</FieldLabel>
-                <Select value={field.value} onValueChange={field.onChange}>
-                  <SelectTrigger><SelectValue placeholder="Select order" /></SelectTrigger>
-                  <SelectContent>
-                    {salesOrders.map((o) => (
-                      <SelectItem key={o.id} value={o.id}>{o.orderNumber ?? o.id.slice(0, 8)} — {formatCurrency(o.balance)} due</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
-              </Field>
-            )} />
-            <div className="grid grid-cols-2 gap-3">
-              <Controller control={form.control} name="amount" render={({ field, fieldState }) => (
+            <Controller
+              control={form.control}
+              name="salesOrderId"
+              render={({ field, fieldState }) => (
                 <Field data-invalid={fieldState.invalid}>
-                  <FieldLabel>Amount *</FieldLabel>
-                  <Input {...field} type="number" step="0.01" min="0.01" />
-                  {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
-                </Field>
-              )} />
-              <Controller control={form.control} name="method" render={({ field }) => (
-                <Field>
-                  <FieldLabel>Method</FieldLabel>
-                  <Select value={String(field.value)} onValueChange={(v) => field.onChange(Number(v))}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
+                  <FieldLabel>Sales Order *</FieldLabel>
+                  <Select value={field.value} onValueChange={field.onChange}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select order" />
+                    </SelectTrigger>
                     <SelectContent>
-                      {Object.entries(paymentMethodLabels).map(([k, v]) => (
-                        <SelectItem key={k} value={k}>{v}</SelectItem>
+                      {salesOrders.map((o) => (
+                        <SelectItem key={o.id} value={o.id}>
+                          {o.orderNumber ?? o.id.slice(0, 8)} — {formatCurrency(o.balance)} due
+                        </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
+                  {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
                 </Field>
-              )} />
+              )}
+            />
+            <div className="grid grid-cols-2 gap-3">
+              <Controller
+                control={form.control}
+                name="amount"
+                render={({ field, fieldState }) => (
+                  <Field data-invalid={fieldState.invalid}>
+                    <FieldLabel>Amount *</FieldLabel>
+                    <Input {...field} type="number" step="0.01" min="0.01" />
+                    {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
+                  </Field>
+                )}
+              />
+              <Controller
+                control={form.control}
+                name="method"
+                render={({ field }) => (
+                  <Field>
+                    <FieldLabel>Method</FieldLabel>
+                    <Select value={String(field.value)} onValueChange={(v) => field.onChange(Number(v))}>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {Object.entries(paymentMethodLabels).map(([k, v]) => (
+                          <SelectItem key={k} value={k}>
+                            {v}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </Field>
+                )}
+              />
             </div>
             <div className="grid grid-cols-2 gap-3">
-              <Controller control={form.control} name="paymentDate" render={({ field }) => (
-                <Field><FieldLabel>Payment Date</FieldLabel><Input {...field} type="date" /></Field>
-              )} />
-              <Controller control={form.control} name="referenceNumber" render={({ field }) => (
-                <Field><FieldLabel>Reference #</FieldLabel><Input {...field} /></Field>
-              )} />
+              <Controller
+                control={form.control}
+                name="paymentDate"
+                render={({ field }) => (
+                  <Field>
+                    <FieldLabel>Payment Date</FieldLabel>
+                    <Input {...field} type="date" />
+                  </Field>
+                )}
+              />
+              <Controller
+                control={form.control}
+                name="referenceNumber"
+                render={({ field }) => (
+                  <Field>
+                    <FieldLabel>Reference #</FieldLabel>
+                    <Input {...field} />
+                  </Field>
+                )}
+              />
             </div>
-            <Controller control={form.control} name="notes" render={({ field }) => (
-              <Field><FieldLabel>Notes</FieldLabel><Input {...field} /></Field>
-            )} />
+            <Controller
+              control={form.control}
+              name="notes"
+              render={({ field }) => (
+                <Field>
+                  <FieldLabel>Notes</FieldLabel>
+                  <Input {...field} />
+                </Field>
+              )}
+            />
           </FieldGroup>
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isLoading}>Cancel</Button>
-            <Button type="submit" disabled={isLoading}>{isLoading ? "Saving…" : "Record Payment"}</Button>
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isLoading}>
+              Cancel
+            </Button>
+            <Button type="submit" disabled={isLoading}>
+              {isLoading ? "Saving…" : "Record Payment"}
+            </Button>
           </DialogFooter>
         </form>
       </DialogContent>
@@ -116,25 +192,56 @@ function RecordPaymentForm({ open, onOpenChange, onSubmit, isLoading, salesOrder
   );
 }
 
-function VoidDialog({ open, onOpenChange, payment, onVoid, isLoading }: {
-  open: boolean; onOpenChange: (o: boolean) => void; payment: PaymentDto | null;
-  onVoid: (reason?: string) => Promise<void>; isLoading?: boolean;
+function VoidDialog({
+  open,
+  onOpenChange,
+  payment,
+  onVoid,
+  isLoading,
+}: {
+  open: boolean;
+  onOpenChange: (o: boolean) => void;
+  payment: PaymentDto | null;
+  onVoid: (reason?: string) => Promise<void>;
+  isLoading?: boolean;
 }) {
   const form = useForm<VoidFormValues>({ resolver: zodResolver(voidSchema), defaultValues: { reason: "" } });
-  useEffect(() => { if (!open) form.reset({ reason: "" }); }, [open, form]);
+  useEffect(() => {
+    if (!open) form.reset({ reason: "" });
+  }, [open, form]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
-        <DialogHeader><DialogTitle>Void Payment</DialogTitle></DialogHeader>
-        <p className="text-sm text-muted-foreground">Void payment of {payment ? formatCurrency(payment.amount) : ""}?</p>
-        <form onSubmit={form.handleSubmit(async (v) => { await onVoid(v.reason || undefined); })} className="space-y-4">
-          <Controller control={form.control} name="reason" render={({ field }) => (
-            <Field><FieldLabel>Reason (optional)</FieldLabel><Input {...field} /></Field>
-          )} />
+        <DialogHeader>
+          <DialogTitle>Void Payment</DialogTitle>
+        </DialogHeader>
+        <p className="text-muted-foreground text-sm">
+          Void payment of {payment ? formatCurrency(payment.amount) : ""}?
+        </p>
+        <form
+          onSubmit={form.handleSubmit(async (v) => {
+            await onVoid(v.reason || undefined);
+          })}
+          className="space-y-4"
+        >
+          <Controller
+            control={form.control}
+            name="reason"
+            render={({ field }) => (
+              <Field>
+                <FieldLabel>Reason (optional)</FieldLabel>
+                <Input {...field} />
+              </Field>
+            )}
+          />
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isLoading}>Cancel</Button>
-            <Button type="submit" variant="destructive" disabled={isLoading}>{isLoading ? "Voiding…" : "Void Payment"}</Button>
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isLoading}>
+              Cancel
+            </Button>
+            <Button type="submit" variant="destructive" disabled={isLoading}>
+              {isLoading ? "Voiding…" : "Void Payment"}
+            </Button>
           </DialogFooter>
         </form>
       </DialogContent>
@@ -163,35 +270,72 @@ export default function PaymentsPage() {
       const res = await listPayments({ Page: page, PageSize: pageSize });
       const d = res.data;
       setItems(d.items ?? []);
-      setTotalCount(d.totalCount); setTotalPages(d.totalPages); setHasPrevious(d.hasPrevious); setHasNext(d.hasNext);
+      setTotalCount(d.totalCount);
+      setTotalPages(d.totalPages);
+      setHasPrevious(d.hasPrevious);
+      setHasNext(d.hasNext);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to load payments.");
-    } finally { setIsLoading(false); }
+    } finally {
+      setIsLoading(false);
+    }
   }, [page, pageSize]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    void load();
+  }, [load]);
 
   useEffect(() => {
-    listSalesOrders({ PageSize: 500 }).then((r) => setSalesOrders(r.data.items ?? [])).catch(() => {});
+    listSalesOrders({ PageSize: 500 })
+      .then((r) => setSalesOrders(r.data.items ?? []))
+      .catch(() => {
+        /* noop */
+      });
   }, []);
 
   const columns: ColumnDef<PaymentDto, unknown>[] = [
-    { accessorKey: "orderNumber", header: "Order #", cell: ({ getValue }) => <span className="font-mono text-xs">{(getValue() as string | null) ?? "—"}</span> },
-    { accessorKey: "paymentDate", header: "Date", cell: ({ getValue }) => new Date(getValue() as string).toLocaleDateString() },
+    {
+      accessorKey: "orderNumber",
+      header: "Order #",
+      cell: ({ getValue }) => <span className="font-mono text-xs">{(getValue() as string | null) ?? "—"}</span>,
+    },
+    {
+      accessorKey: "paymentDate",
+      header: "Date",
+      cell: ({ getValue }) => new Date(getValue() as string).toLocaleDateString(),
+    },
     { accessorKey: "amount", header: "Amount", cell: ({ getValue }) => formatCurrency(getValue() as number) },
-    { accessorKey: "method", header: "Method", cell: ({ getValue }) => paymentMethodLabels[getValue() as PaymentMethod] },
-    { accessorKey: "referenceNumber", header: "Reference", cell: ({ getValue }) => (getValue() as string | null) ?? "—" },
-    { accessorKey: "isVoided", header: "Status", cell: ({ getValue }) => {
-      const voided = getValue() as boolean;
-      return <Badge variant={voided ? "destructive" : "default"}>{voided ? "Voided" : "Active"}</Badge>;
-    }},
-    { id: "actions", header: "", cell: ({ row }) => (
-      <div className="flex gap-2 justify-end">
-        {!row.original.isVoided && (
-          <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive" onClick={() => setVoidTarget(row.original)}>Void</Button>
-        )}
-      </div>
-    )},
+    {
+      accessorKey: "method",
+      header: "Method",
+      cell: ({ getValue }) => paymentMethodLabels[getValue() as PaymentMethod],
+    },
+    {
+      accessorKey: "referenceNumber",
+      header: "Reference",
+      cell: ({ getValue }) => (getValue() as string | null) ?? "—",
+    },
+    {
+      accessorKey: "isVoided",
+      header: "Status",
+      cell: ({ getValue }) => {
+        const voided = getValue() as boolean;
+        return <Badge variant={voided ? "destructive" : "default"}>{voided ? "Voided" : "Active"}</Badge>;
+      },
+    },
+    {
+      id: "actions",
+      header: "Actions",
+      cell: ({ row }) => (
+        <RowActions
+          actions={[
+            ...(!row.original.isVoided
+              ? [{ label: "Void", onClick: () => setVoidTarget(row.original), destructive: true }]
+              : []),
+          ]}
+        />
+      ),
+    },
   ];
 
   const handleSubmit = async (values: FormValues) => {
@@ -206,10 +350,13 @@ export default function PaymentsPage() {
         notes: values.notes || undefined,
       });
       toast.success("Payment recorded.");
-      setFormOpen(false); load();
+      setFormOpen(false);
+      await load();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to record payment.");
-    } finally { setIsSaving(false); }
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const handleVoid = async (reason?: string) => {
@@ -217,21 +364,58 @@ export default function PaymentsPage() {
     setIsVoiding(true);
     try {
       await voidPayment(voidTarget.id, { reason });
-      toast.success("Payment voided."); setVoidTarget(null); load();
+      toast.success("Payment voided.");
+      setVoidTarget(null);
+      await load();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to void payment.");
-    } finally { setIsVoiding(false); }
+    } finally {
+      setIsVoiding(false);
+    }
   };
 
   return (
     <div>
-      <PageHeader title="Payments" description="Manage customer payments" action={
-        <Button onClick={() => setFormOpen(true)}><Plus className="h-4 w-4 mr-2" />Record Payment</Button>
-      } />
+      <PageHeader
+        title="Payments"
+        description="Manage customer payments"
+        action={
+          <Button onClick={() => setFormOpen(true)}>
+            <Plus className="mr-2 h-4 w-4" />
+            Record Payment
+          </Button>
+        }
+      />
       <DataTable columns={columns} data={items} isLoading={isLoading} />
-      <DataTablePagination page={page} pageSize={pageSize} totalCount={totalCount} totalPages={totalPages} hasPrevious={hasPrevious} hasNext={hasNext} onPageChange={setPage} onPageSizeChange={(s) => { setPageSize(s); setPage(1); }} />
-      <RecordPaymentForm open={formOpen} onOpenChange={setFormOpen} onSubmit={handleSubmit} isLoading={isSaving} salesOrders={salesOrders} />
-      <VoidDialog open={!!voidTarget} onOpenChange={(o) => { if (!o) setVoidTarget(null); }} payment={voidTarget} onVoid={handleVoid} isLoading={isVoiding} />
+      <DataTablePagination
+        page={page}
+        pageSize={pageSize}
+        totalCount={totalCount}
+        totalPages={totalPages}
+        hasPrevious={hasPrevious}
+        hasNext={hasNext}
+        onPageChange={setPage}
+        onPageSizeChange={(s) => {
+          setPageSize(s);
+          setPage(1);
+        }}
+      />
+      <RecordPaymentForm
+        open={formOpen}
+        onOpenChange={setFormOpen}
+        onSubmit={handleSubmit}
+        isLoading={isSaving}
+        salesOrders={salesOrders}
+      />
+      <VoidDialog
+        open={!!voidTarget}
+        onOpenChange={(o) => {
+          if (!o) setVoidTarget(null);
+        }}
+        payment={voidTarget}
+        onVoid={handleVoid}
+        isLoading={isVoiding}
+      />
     </div>
   );
 }

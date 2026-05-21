@@ -3,9 +3,12 @@
 import { useCallback, useEffect, useState } from "react";
 
 import Link from "next/link";
-import { Plus } from "lucide-react";
+import { useRouter } from "next/navigation";
+
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Controller, useFieldArray, useForm, type Resolver } from "react-hook-form";
+import type { ColumnDef } from "@tanstack/react-table";
+import { Plus } from "lucide-react";
+import { Controller, type Resolver, useFieldArray, useForm } from "react-hook-form";
 import { toast } from "sonner";
 import { z } from "zod";
 
@@ -13,19 +16,19 @@ import { ConfirmDialog } from "@/components/confirm-dialog";
 import { DataTable } from "@/components/data-table/data-table";
 import { DataTablePagination } from "@/components/data-table/data-table-pagination";
 import { PageHeader } from "@/components/page-header";
+import { RowActions } from "@/components/row-actions";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Field, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { paymentStatusLabels, salesOrderStatusLabels } from "@/lib/api/enum-labels";
-import { createSalesOrder, deleteSalesOrder, listSalesOrders } from "@/lib/api/sales-orders";
 import { listCustomers } from "@/lib/api/customers";
+import { paymentStatusLabels, salesOrderStatusLabels } from "@/lib/api/enum-labels";
 import { listProducts } from "@/lib/api/products";
-import { PaymentStatus, SalesOrderStatus, type CustomerDto, type SalesOrderDto } from "@/lib/api/types";
+import { createSalesOrder, deleteSalesOrder, listSalesOrders } from "@/lib/api/sales-orders";
+import { type CustomerDto, PaymentStatus, type SalesOrderDto, SalesOrderStatus } from "@/lib/api/types";
 import { formatCurrency } from "@/lib/utils";
-import type { ColumnDef } from "@tanstack/react-table";
 
 const statusVariant: Record<SalesOrderStatus, "default" | "secondary" | "destructive" | "outline"> = {
   [SalesOrderStatus.Draft]: "secondary",
@@ -58,105 +61,204 @@ const schema = z.object({
 });
 type FormValues = z.infer<typeof schema>;
 
-function SalesOrderForm({ open, onOpenChange, onSubmit, isLoading, customers, products }: {
-  open: boolean; onOpenChange: (o: boolean) => void; onSubmit: (v: FormValues) => Promise<void>;
-  isLoading?: boolean; customers: CustomerDto[]; products: { id: string; name: string | null; sku: string | null; unitPrice: number }[];
+function SalesOrderForm({
+  open,
+  onOpenChange,
+  onSubmit,
+  isLoading,
+  customers,
+  products,
+}: {
+  open: boolean;
+  onOpenChange: (o: boolean) => void;
+  onSubmit: (v: FormValues) => Promise<void>;
+  isLoading?: boolean;
+  customers: CustomerDto[];
+  products: { id: string; name: string | null; sku: string | null; unitPrice: number }[];
 }) {
   const today = new Date().toISOString().split("T")[0];
   const form = useForm<FormValues>({
     resolver: zodResolver(schema) as Resolver<FormValues>,
-    defaultValues: { customerId: "", orderDate: today, notes: "", items: [{ productId: "", quantity: 1, unitPrice: 0, discountPercent: 0, taxPercent: 0 }] },
+    defaultValues: {
+      customerId: "",
+      orderDate: today,
+      notes: "",
+      items: [{ productId: "", quantity: 1, unitPrice: 0, discountPercent: 0, taxPercent: 0 }],
+    },
   });
   const { fields, append, remove } = useFieldArray({ control: form.control, name: "items" });
 
   useEffect(() => {
-    if (!open) form.reset({ customerId: "", orderDate: today, notes: "", items: [{ productId: "", quantity: 1, unitPrice: 0, discountPercent: 0, taxPercent: 0 }] });
+    if (!open)
+      form.reset({
+        customerId: "",
+        orderDate: today,
+        notes: "",
+        items: [{ productId: "", quantity: 1, unitPrice: 0, discountPercent: 0, taxPercent: 0 }],
+      });
   }, [open, form, today]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader><DialogTitle>New Sales Order</DialogTitle></DialogHeader>
-        <form onSubmit={form.handleSubmit(async (v) => { await onSubmit(v); })} className="space-y-4">
+      <DialogContent className="max-h-[90vh] max-w-4xl overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>New Sales Order</DialogTitle>
+        </DialogHeader>
+        <form
+          onSubmit={form.handleSubmit(async (v) => {
+            await onSubmit(v);
+          })}
+          className="space-y-4"
+        >
           <FieldGroup className="gap-4">
             <div className="grid grid-cols-3 gap-4">
-              <Controller control={form.control} name="customerId" render={({ field }) => (
-                <Field>
-                  <FieldLabel>Customer</FieldLabel>
-                  <Select value={field.value ?? ""} onValueChange={(v) => field.onChange(v === "none" ? "" : v)}>
-                    <SelectTrigger><SelectValue placeholder="Walk-in / Anonymous" /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="none">Walk-in</SelectItem>
-                      {customers.map((c) => <SelectItem key={c.id} value={c.id}>{c.firstName} {c.lastName}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                </Field>
-              )} />
-              <Controller control={form.control} name="orderDate" render={({ field, fieldState }) => (
-                <Field data-invalid={fieldState.invalid}>
-                  <FieldLabel>Order Date *</FieldLabel>
-                  <Input {...field} type="date" />
-                  {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
-                </Field>
-              )} />
-              <Controller control={form.control} name="notes" render={({ field }) => (
-                <Field><FieldLabel>Notes</FieldLabel><Input {...field} /></Field>
-              )} />
+              <Controller
+                control={form.control}
+                name="customerId"
+                render={({ field }) => (
+                  <Field>
+                    <FieldLabel>Customer</FieldLabel>
+                    <Select value={field.value ?? ""} onValueChange={(v) => field.onChange(v === "none" ? "" : v)}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Walk-in / Anonymous" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">Walk-in</SelectItem>
+                        {customers.map((c) => (
+                          <SelectItem key={c.id} value={c.id}>
+                            {c.firstName} {c.lastName}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </Field>
+                )}
+              />
+              <Controller
+                control={form.control}
+                name="orderDate"
+                render={({ field, fieldState }) => (
+                  <Field data-invalid={fieldState.invalid}>
+                    <FieldLabel>Order Date *</FieldLabel>
+                    <Input {...field} type="date" />
+                    {fieldState.invalid && <FieldError errors={[fieldState.error]} />}
+                  </Field>
+                )}
+              />
+              <Controller
+                control={form.control}
+                name="notes"
+                render={({ field }) => (
+                  <Field>
+                    <FieldLabel>Notes</FieldLabel>
+                    <Input {...field} />
+                  </Field>
+                )}
+              />
             </div>
             <div className="space-y-2">
               <FieldLabel>Items *</FieldLabel>
               {fields.map((f, i) => (
-                <div key={f.id} className="grid grid-cols-[1fr_60px_90px_70px_70px_32px] gap-2 items-end">
-                  <Controller control={form.control} name={`items.${i}.productId`} render={({ field }) => (
-                    <Field>
-                      {i === 0 && <FieldLabel className="text-xs text-muted-foreground">Product</FieldLabel>}
-                      <Select value={field.value} onValueChange={(v) => {
-                        field.onChange(v);
-                        const p = products.find((x) => x.id === v);
-                        if (p) form.setValue(`items.${i}.unitPrice`, p.unitPrice);
-                      }}>
-                        <SelectTrigger><SelectValue placeholder="Product" /></SelectTrigger>
-                        <SelectContent>
-                          {products.map((p) => <SelectItem key={p.id} value={p.id}>{p.sku ? `[${p.sku}] ` : ""}{p.name}</SelectItem>)}
-                        </SelectContent>
-                      </Select>
-                    </Field>
-                  )} />
-                  <Controller control={form.control} name={`items.${i}.quantity`} render={({ field }) => (
-                    <Field>
-                      {i === 0 && <FieldLabel className="text-xs text-muted-foreground">Qty</FieldLabel>}
-                      <Input {...field} type="number" min="1" />
-                    </Field>
-                  )} />
-                  <Controller control={form.control} name={`items.${i}.unitPrice`} render={({ field }) => (
-                    <Field>
-                      {i === 0 && <FieldLabel className="text-xs text-muted-foreground">Price</FieldLabel>}
-                      <Input {...field} type="number" step="0.01" min="0" />
-                    </Field>
-                  )} />
-                  <Controller control={form.control} name={`items.${i}.discountPercent`} render={({ field }) => (
-                    <Field>
-                      {i === 0 && <FieldLabel className="text-xs text-muted-foreground">Disc %</FieldLabel>}
-                      <Input {...field} type="number" min="0" max="100" />
-                    </Field>
-                  )} />
-                  <Controller control={form.control} name={`items.${i}.taxPercent`} render={({ field }) => (
-                    <Field>
-                      {i === 0 && <FieldLabel className="text-xs text-muted-foreground">Tax %</FieldLabel>}
-                      <Input {...field} type="number" min="0" max="100" />
-                    </Field>
-                  )} />
-                  <Button type="button" variant="ghost" size="sm" className="text-destructive" onClick={() => remove(i)} disabled={fields.length === 1}>✕</Button>
+                <div key={f.id} className="grid grid-cols-[1fr_60px_90px_70px_70px_32px] items-end gap-2">
+                  <Controller
+                    control={form.control}
+                    name={`items.${i}.productId`}
+                    render={({ field }) => (
+                      <Field>
+                        {i === 0 && <FieldLabel className="text-muted-foreground text-xs">Product</FieldLabel>}
+                        <Select
+                          value={field.value}
+                          onValueChange={(v) => {
+                            field.onChange(v);
+                            const p = products.find((x) => x.id === v);
+                            if (p) form.setValue(`items.${i}.unitPrice`, p.unitPrice);
+                          }}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Product" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {products.map((p) => (
+                              <SelectItem key={p.id} value={p.id}>
+                                {p.sku ? `[${p.sku}] ` : ""}
+                                {p.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </Field>
+                    )}
+                  />
+                  <Controller
+                    control={form.control}
+                    name={`items.${i}.quantity`}
+                    render={({ field }) => (
+                      <Field>
+                        {i === 0 && <FieldLabel className="text-muted-foreground text-xs">Qty</FieldLabel>}
+                        <Input {...field} type="number" min="1" />
+                      </Field>
+                    )}
+                  />
+                  <Controller
+                    control={form.control}
+                    name={`items.${i}.unitPrice`}
+                    render={({ field }) => (
+                      <Field>
+                        {i === 0 && <FieldLabel className="text-muted-foreground text-xs">Price</FieldLabel>}
+                        <Input {...field} type="number" step="0.01" min="0" />
+                      </Field>
+                    )}
+                  />
+                  <Controller
+                    control={form.control}
+                    name={`items.${i}.discountPercent`}
+                    render={({ field }) => (
+                      <Field>
+                        {i === 0 && <FieldLabel className="text-muted-foreground text-xs">Disc %</FieldLabel>}
+                        <Input {...field} type="number" min="0" max="100" />
+                      </Field>
+                    )}
+                  />
+                  <Controller
+                    control={form.control}
+                    name={`items.${i}.taxPercent`}
+                    render={({ field }) => (
+                      <Field>
+                        {i === 0 && <FieldLabel className="text-muted-foreground text-xs">Tax %</FieldLabel>}
+                        <Input {...field} type="number" min="0" max="100" />
+                      </Field>
+                    )}
+                  />
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="text-destructive"
+                    onClick={() => remove(i)}
+                    disabled={fields.length === 1}
+                  >
+                    ✕
+                  </Button>
                 </div>
               ))}
-              <Button type="button" variant="outline" size="sm" onClick={() => append({ productId: "", quantity: 1, unitPrice: 0, discountPercent: 0, taxPercent: 0 })}>
-                <Plus className="h-3 w-3 mr-1" />Add Item
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => append({ productId: "", quantity: 1, unitPrice: 0, discountPercent: 0, taxPercent: 0 })}
+              >
+                <Plus className="mr-1 h-3 w-3" />
+                Add Item
               </Button>
             </div>
           </FieldGroup>
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isLoading}>Cancel</Button>
-            <Button type="submit" disabled={isLoading}>{isLoading ? "Saving…" : "Create"}</Button>
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isLoading}>
+              Cancel
+            </Button>
+            <Button type="submit" disabled={isLoading}>
+              {isLoading ? "Saving…" : "Create"}
+            </Button>
           </DialogFooter>
         </form>
       </DialogContent>
@@ -165,6 +267,7 @@ function SalesOrderForm({ open, onOpenChange, onSubmit, isLoading, customers, pr
 }
 
 export default function SalesOrdersPage() {
+  const router = useRouter();
   const [items, setItems] = useState<SalesOrderDto[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -179,7 +282,9 @@ export default function SalesOrdersPage() {
   const [isSaving, setIsSaving] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [customers, setCustomers] = useState<CustomerDto[]>([]);
-  const [products, setProducts] = useState<{ id: string; name: string | null; sku: string | null; unitPrice: number }[]>([]);
+  const [products, setProducts] = useState<
+    { id: string; name: string | null; sku: string | null; unitPrice: number }[]
+  >([]);
 
   const load = useCallback(async () => {
     setIsLoading(true);
@@ -187,46 +292,96 @@ export default function SalesOrdersPage() {
       const res = await listSalesOrders({ Page: page, PageSize: pageSize, Search: search || undefined });
       const d = res.data;
       setItems(d.items ?? []);
-      setTotalCount(d.totalCount); setTotalPages(d.totalPages); setHasPrevious(d.hasPrevious); setHasNext(d.hasNext);
+      setTotalCount(d.totalCount);
+      setTotalPages(d.totalPages);
+      setHasPrevious(d.hasPrevious);
+      setHasNext(d.hasNext);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to load sales orders.");
-    } finally { setIsLoading(false); }
+    } finally {
+      setIsLoading(false);
+    }
   }, [page, pageSize, search]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    void load();
+  }, [load]);
 
   useEffect(() => {
-    listCustomers({ PageSize: 500 }).then((r) => setCustomers(r.data.items ?? [])).catch(() => {});
-    listProducts({ PageSize: 500 }).then((r) => setProducts(r.data.items?.map((p) => ({ id: p.id, name: p.name, sku: p.sku, unitPrice: p.unitPrice })) ?? [])).catch(() => {});
+    listCustomers({ PageSize: 500 })
+      .then((r) => setCustomers(r.data.items ?? []))
+      .catch(() => {
+        /* noop */
+      });
+    listProducts({ PageSize: 500 })
+      .then((r) =>
+        setProducts(r.data.items?.map((p) => ({ id: p.id, name: p.name, sku: p.sku, unitPrice: p.unitPrice })) ?? []),
+      )
+      .catch(() => {
+        /* noop */
+      });
   }, []);
 
   const columns: ColumnDef<SalesOrderDto, unknown>[] = [
-    { accessorKey: "orderNumber", header: "Order #", cell: ({ getValue, row }) => (
-      <Link href={`/dashboard/sales-orders/${row.original.id}`} className="font-mono text-xs hover:underline text-primary">
-        {(getValue() as string | null) ?? row.original.id.slice(0, 8)}
-      </Link>
-    )},
-    { accessorKey: "customerName", header: "Customer", cell: ({ getValue }) => (getValue() as string | null) ?? "Walk-in" },
-    { accessorKey: "orderDate", header: "Date", cell: ({ getValue }) => new Date(getValue() as string).toLocaleDateString() },
+    {
+      accessorKey: "orderNumber",
+      header: "Order #",
+      cell: ({ getValue, row }) => (
+        <Link
+          href={`/dashboard/sales-orders/${row.original.id}`}
+          className="font-mono text-primary text-xs hover:underline"
+        >
+          {(getValue() as string | null) ?? row.original.id.slice(0, 8)}
+        </Link>
+      ),
+    },
+    {
+      accessorKey: "customerName",
+      header: "Customer",
+      cell: ({ getValue }) => (getValue() as string | null) ?? "Walk-in",
+    },
+    {
+      accessorKey: "orderDate",
+      header: "Date",
+      cell: ({ getValue }) => new Date(getValue() as string).toLocaleDateString(),
+    },
     { accessorKey: "grandTotal", header: "Total", cell: ({ getValue }) => formatCurrency(getValue() as number) },
-    { accessorKey: "status", header: "Status", cell: ({ getValue }) => {
-      const s = getValue() as SalesOrderStatus;
-      return <Badge variant={statusVariant[s]}>{salesOrderStatusLabels[s]}</Badge>;
-    }},
-    { accessorKey: "paymentStatus", header: "Payment", cell: ({ getValue }) => {
-      const s = getValue() as PaymentStatus;
-      return <Badge variant={paymentStatusVariant[s]}>{paymentStatusLabels[s]}</Badge>;
-    }},
-    { accessorKey: "balance", header: "Balance", cell: ({ getValue }) => {
-      const v = getValue() as number;
-      return <span className={v > 0 ? "text-destructive" : ""}>{formatCurrency(v)}</span>;
-    }},
-    { id: "actions", header: "", cell: ({ row }) => (
-      <div className="flex gap-2 justify-end">
-        <Button variant="ghost" size="sm" asChild><Link href={`/dashboard/sales-orders/${row.original.id}`}>View</Link></Button>
-        <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive" onClick={() => setDeleteTarget(row.original)}>Delete</Button>
-      </div>
-    )},
+    {
+      accessorKey: "status",
+      header: "Status",
+      cell: ({ getValue }) => {
+        const s = getValue() as SalesOrderStatus;
+        return <Badge variant={statusVariant[s]}>{salesOrderStatusLabels[s]}</Badge>;
+      },
+    },
+    {
+      accessorKey: "paymentStatus",
+      header: "Payment",
+      cell: ({ getValue }) => {
+        const s = getValue() as PaymentStatus;
+        return <Badge variant={paymentStatusVariant[s]}>{paymentStatusLabels[s]}</Badge>;
+      },
+    },
+    {
+      accessorKey: "balance",
+      header: "Balance",
+      cell: ({ getValue }) => {
+        const v = getValue() as number;
+        return <span className={v > 0 ? "text-destructive" : ""}>{formatCurrency(v)}</span>;
+      },
+    },
+    {
+      id: "actions",
+      header: "Actions",
+      cell: ({ row }) => (
+        <RowActions
+          actions={[
+            { label: "View", onClick: () => router.push(`/dashboard/sales-orders/${row.original.id}`) },
+            { label: "Delete", onClick: () => setDeleteTarget(row.original), destructive: true, separator: true },
+          ]}
+        />
+      ),
+    },
   ];
 
   const handleSubmit = async (values: FormValues) => {
@@ -239,10 +394,13 @@ export default function SalesOrdersPage() {
         items: values.items,
       });
       toast.success("Sales order created.");
-      setFormOpen(false); load();
+      setFormOpen(false);
+      await load();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to create sales order.");
-    } finally { setIsSaving(false); }
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const handleDelete = async () => {
@@ -250,24 +408,72 @@ export default function SalesOrdersPage() {
     setIsDeleting(true);
     try {
       await deleteSalesOrder(deleteTarget.id);
-      toast.success("Sales order deleted."); setDeleteTarget(null); load();
+      toast.success("Sales order deleted.");
+      setDeleteTarget(null);
+      await load();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to delete sales order.");
-    } finally { setIsDeleting(false); }
+    } finally {
+      setIsDeleting(false);
+    }
   };
 
   return (
     <div>
-      <PageHeader title="Sales Orders" description="Manage customer sales orders" action={
-        <Button onClick={() => setFormOpen(true)}><Plus className="h-4 w-4 mr-2" />New Sales Order</Button>
-      } />
-      <div className="flex gap-2 mb-4">
-        <Input placeholder="Search sales orders…" value={search} onChange={(e) => { setSearch(e.target.value); setPage(1); }} className="max-w-sm" />
+      <PageHeader
+        title="Sales Orders"
+        description="Manage customer sales orders"
+        action={
+          <Button onClick={() => setFormOpen(true)}>
+            <Plus className="mr-2 h-4 w-4" />
+            New Sales Order
+          </Button>
+        }
+      />
+      <div className="mb-4 flex gap-2">
+        <Input
+          placeholder="Search sales orders…"
+          value={search}
+          onChange={(e) => {
+            setSearch(e.target.value);
+            setPage(1);
+          }}
+          className="max-w-sm"
+        />
       </div>
       <DataTable columns={columns} data={items} isLoading={isLoading} />
-      <DataTablePagination page={page} pageSize={pageSize} totalCount={totalCount} totalPages={totalPages} hasPrevious={hasPrevious} hasNext={hasNext} onPageChange={setPage} onPageSizeChange={(s) => { setPageSize(s); setPage(1); }} />
-      <SalesOrderForm open={formOpen} onOpenChange={setFormOpen} onSubmit={handleSubmit} isLoading={isSaving} customers={customers} products={products} />
-      <ConfirmDialog open={!!deleteTarget} onOpenChange={(o) => { if (!o) setDeleteTarget(null); }} title="Delete Sales Order" description={`Delete order "${deleteTarget?.orderNumber}"?`} onConfirm={handleDelete} isLoading={isDeleting} confirmLabel="Delete" />
+      <DataTablePagination
+        page={page}
+        pageSize={pageSize}
+        totalCount={totalCount}
+        totalPages={totalPages}
+        hasPrevious={hasPrevious}
+        hasNext={hasNext}
+        onPageChange={setPage}
+        onPageSizeChange={(s) => {
+          setPageSize(s);
+          setPage(1);
+        }}
+      />
+      <SalesOrderForm
+        open={formOpen}
+        onOpenChange={setFormOpen}
+        onSubmit={handleSubmit}
+        isLoading={isSaving}
+        customers={customers}
+        products={products}
+      />
+      <ConfirmDialog
+        open={!!deleteTarget}
+        onOpenChange={(o) => {
+          if (!o) setDeleteTarget(null);
+        }}
+        title="Delete Sales Order"
+        description={`Delete order "${deleteTarget?.orderNumber}"?`}
+        onConfirm={handleDelete}
+        isLoading={isDeleting}
+        confirmLabel="Delete"
+      />
     </div>
   );
 }

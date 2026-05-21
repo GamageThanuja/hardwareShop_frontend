@@ -10,6 +10,7 @@ import { ConfirmDialog } from "@/components/confirm-dialog";
 import { DataTable } from "@/components/data-table/data-table";
 import { DataTablePagination } from "@/components/data-table/data-table-pagination";
 import { PageHeader } from "@/components/page-header";
+import { RowActions } from "@/components/row-actions";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -119,28 +120,20 @@ export default function ProductsPage() {
     },
     {
       id: "actions",
-      header: "",
+      header: "Actions",
       cell: ({ row }) => (
-        <div className="flex justify-end gap-2">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => {
-              setEditTarget(row.original);
-              setFormOpen(true);
-            }}
-          >
-            Edit
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="text-destructive hover:text-destructive"
-            onClick={() => setDeleteTarget(row.original)}
-          >
-            Delete
-          </Button>
-        </div>
+        <RowActions
+          actions={[
+            {
+              label: "Edit",
+              onClick: () => {
+                setEditTarget(row.original);
+                setFormOpen(true);
+              },
+            },
+            { label: "Delete", onClick: () => setDeleteTarget(row.original), destructive: true, separator: true },
+          ]}
+        />
       ),
     },
   ];
